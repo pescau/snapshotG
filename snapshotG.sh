@@ -1,25 +1,52 @@
 #!/bin/sh
-#Prueba de concepto
-echo '~~~~~~~~ MV ~~~~~~~~~~~~~~~~~'
-mv -v testback/5/ testback/tmp
-mv -v testback/4/ testback/5
-mv -v testback/3/ testback/4
-mv -v testback/2/ testback/3
-mv -v testback/1/ testback/2
-mv -v testback/0/ testback/1
-mv -v testback/tmp/ testback/0
-echo '~~~~~~~~~~~ CP ~~~~~~~~~~~~~~'
-cp -v -al testback/1/. testback/0
-echo '~~~~~~~~~~~ RSYNC ~~~~~~~~~~~~~~'
-rsync -av --delete --numeric-ids orig/ testback/0/
+########################################################
+## Configuración:
+#''' Ejecutables:
+cat="/usr/gnu/bin/cat"
+mv="/usr/gnu/bin/mv -v"
+cp="/usr/gnu/bin/cp -v"
+echo="/usr/gnu/bin/echo"
+stat="/usr/bin/stat"
+rsync="/usr/bin/rsync --exclude --exclude 'tmp' --exclude '/dev/' --exclude=var/log -av --delete --numeric-ids --rsh=/usr/bin/ssh"
 
-# Ver si el archivo de control está cambiando:
-echo '~~~~~~~~~~~ CHECK ~~~~~~~~~~~~~~'
-echo orig/ls.txt: ;cat orig/ls.txt
-echo
-echo testback/0/ls.txt: ; cat testback/0/ls.txt
-echo testback/1/ls.txt: ; cat testback/1/ls.txt
-echo testback/2/ls.txt: ; cat testback/2/ls.txt
-echo testback/3/ls.txt: ; cat testback/3/ls.txt
-echo testback/4/ls.txt: ; cat testback/4/ls.txt
-echo testback/5/ls.txt: ; cat testback/5/ls.txt
+#'''''' Destinos:
+dest_base="/ANEXOBCK/BACKUP/LAN/daily"
+
+#'''''' Orígenes:
+#cargar aquí usuario, server y/o rutas desde donde traer las cosas
+campuslx='root@172.18.2.242:/'
+anexolx= 'root@172.16.2.254:/'
+
+########################################################
+## Trabajar:
+$echo '~~~~~~~~ MV ~~~~~~~~~~~~~~~~~'
+$mv "$dest_base".5/ "$dest_base".tmp
+$mv "$dest_base".4/ "$dest_base".5
+$mv "$dest_base".3/ "$dest_base".4
+$mv "$dest_base".2/ "$dest_base".3
+$mv "$dest_base".1/ "$dest_base".2
+$mv "$dest_base".0/ "$dest_base".1
+$mv "$dest_base".tmp/ "$dest_base".0
+
+$echo '~~~~~~~~~~~ CP ~~~~~~~~~~~~~~'
+$cp -al "$dest_base".1/. "$dest_base".0
+
+$echo '~~~~~~~~~~~ RSYNC ~~~~~~~~~~~~~~'
+$rsync $campuslx "$dest_base".0/campuslx/
+$rsync $anexolx "$dest_base".0/anexolx/
+
+$echo '~~~~~~~~~~~ CHECK ~~~~~~~~~~~~~~'
+#Archivo supuestamente invariable
+#el inodo debe coincidir y debe tener mas de un link
+$echo "ANEXOLX:"
+stat "$dest_base".0/anexolx/root/archivo_de_control_invariable "$dest_base".0/anexolx/root/archivo_de_control_invariable "$dest_base".1/anexolx/root/archivo_de_control_invariable "$dest_base".2/anexolx/root/archivo_de_control_invariable "$dest_base".3/anexolx/root/archivo_de_control_invariable "$dest_base".4/anexolx/root/archivo_de_control_invariable "$dest_base".5/anexolx/root/archivo_de_control_invariable| grep Inode
+$echo
+#Archivo que debería ser distinto cada día, al menos este debería copiarse en el rsync:
+$echo "$dest_base".0/anexolx/root/control.txt:; $cat "$dest_base".0/anexolx/root/control.txt:
+$echo "$dest_base".1/anexolx/root/control.txt:; $cat "$dest_base".1/anexolx/root/control.txt:
+$echo "$dest_base".2/anexolx/root/control.txt:; $cat "$dest_base".2/anexolx/root/control.txt:
+$echo "$dest_base".3/anexolx/root/control.txt:; $cat "$dest_base".3/anexolx/root/control.txt:
+$echo "$dest_base".4/anexolx/root/control.txt:; $cat "$dest_base".4/anexolx/root/control.txt:
+$echo "$dest_base".5/anexolx/root/control.txt:; $cat "$dest_base".5/anexolx/root/control.txt:
+#                                                 FIN ##
+########################################################
