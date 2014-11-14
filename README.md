@@ -1,5 +1,6 @@
 snapshotG - snapshots de gonzalo
 =========
+just read the raw version of this file
 ES
 --
 (maybe english readme below, e também tal vez português lá baixo): estamos usando rsnapshot (http://www.rsnapshot.org/) para hacer backups incrementales, pero como tenemos mucha información, la etapa de borrado demora demasiado tiempo:
