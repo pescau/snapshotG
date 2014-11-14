@@ -50,7 +50,7 @@ Again: I have a HUGE amount of data.
 
 So, after read this: http://www.mikerubel.org/computers/rsync_snapshots I'm about to work with the suggestion made by John Pelan and recyle the last directory. 
 
-It seems to work for me™, but take care of the warning in the same document.
+It seems to work for me™, but take care of the warning in the same document. 
 
 PT
 --
