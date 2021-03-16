@@ -1,0 +1,194 @@
+#!/bin/sh ######################################################################## 
+### Calesita Cuantica v1.95                                          #### 
+### snapshotG v0.9 Gonzalo Rivero. Ideas tomadas de rsnapshot 
+### snapshotG v1.0 Gonzalo Rivero. Agregados archivos de control 
+### snapshotR v1.5 Facundo Russo. Simplificado y unido en un solo script 
+### snapshotR v1.6 Facundo Russo. Modificada la forma en que rotan los 
+### backups. Limpieza diaria, semanal y mensual por find -delete 
+### snapshotR v1.7 Facundo Russo. revertidos los cambios de 1.6 
+### ningun metodo de borrado parece ser eficiente, los tiempos superan las 8hs 
+### snapshotR v1.8 Facundo Russo. 3 reintentos en caso de falla en el rsync 
+### snapshotR v1.9 Facundo Russo. reimplementacion del borrado, 
+### snapshotR v1.95 Facundo Russo. Correccion de "errores" ;) ;) 
+### snapshotR v1.96 Facundo Russo. archivado de logs dentro de la carpeta 
+########################################################################   
+#export LC_ALL=C dest_base=/BackLAN/CALESITA 
+## Configuracion 
+#Ejecutables: 
+cat="/usr/gnu/bin/cat" 
+mv="/usr/gnu/bin/mv" 
+cp="/usr/gnu/bin/cp" 
+mkdir="/usr/gnu/bin/mkdir" 
+rm="/usr/gnu/bin/rm" 
+stat="/usr/bin/stat" 
+date="/usr/gnu/bin/date" 
+grep="/usr/gnu/bin/grep" 
+ndia=`date "+%a"` 
+ddia=`date "+%d"` 
+rsyncargs="-aHv --delete --numeric-ids --delete-excluded --exclude-from=$dest_base/rsync_exclude_default" 
+rsynckeepargs="-aHv --numeric-ids" 
+#Cantidad de copias a conservar
+modoretdaily=6  # 6 copias diarias
+modoretweekly=3  # 3 copias semanales
+modoretmonthly=1 # 1 copia mensual
+
+#'''''' Destinos: 
+dest_daily=$dest_base/daily 
+dest_weekly=$dest_base/weekly 
+dest_monthly=$dest_base/monthly 
+dest_logs=$dest_daily.0/snapshotR-logs 
+
+#Crear el directorio inicial si es que no existe 
+if [ ! -d "$dest_daily".0 ] then
+  mkdir "$dest_daily".0 
+fi 
+# si existe la carpeta de logs despues de rotar, se la borra y se crea una vacia 
+if [ ! -d $dest_logs ] then
+  mkdir $dest_logs 
+fi 
+#'''''' Orígenes: #cargar aqui usuario, server y/o rutas desde donde traer las cosas 
+servers=( [serverA]="root@x.y.z.a:/" 
+  [serverB]="x.y.z.b:/" 
+  [serverC]="root@x.y.z.c:/path/en/particular" 
+) 
+  
+  ######################################################## 
+  ## Trabajar: 
+  function snapshot { 
+    modoret=modoret$1 
+    modoret=$(eval echo \$$modoret) 
+    echo "Inicio $1:" 
+    echo '~~~~~~~~ MV ~~~~~~~~~~~~~~~~~' 
+    $date 
+    for i in {0..$modoret} do
+      if ! ((i % 3))     
+      then 	
+        echo     
+      fi
+      if [ "$i" -ne "$modoret" ]
+        then 	printf "$1"."$i"" -> "
+        else 	printf "$1"."$i"" -> "$1".0"
+      fi 
+      done 
+      echo 
+      ##rotacion 
+      for i in $(seq $modoret -1 -1) do
+        num=$i     
+        nextnum=$(($i +1))     
+        if [ "$i" -eq "$modoret" ]     
+          then 	nextnum=tmp     
+        fi     
+        if [ "$i" -eq -1 ]     
+          then 	num=tmp     
+        fi
+        echo $mv "$dest_base"/$1.$num/ "$dest_base"/$1.$nextnum
+        $mv "$dest_base"/$1.$num/ "$dest_base"/$1.$nextnum 
+      done
+      echo "------------fin mv----------" 
+      echo '~~~~~~~~~~~ CP ~~~~~~~~~~~~~~' 
+      case $1 in     
+        daily) 	echo 'copiando con enlaces daily.1 => daily.0' 	
+          $date 	
+          $cp -al $dest_daily.1/. $dest_daily.0/ 2> $dest_logs/cp-$1.log 	;;     
+        weekly) 	
+          # mv desde weekly.0 a weekly.borrar 	
+          # mkdir weekly.0. Para asegurarse que empiece vacio 	
+          mv $dest_weekly.0 $weekly_borrar 	
+          mkdir $dest_weekly.0 	
+          echo 'copiando con enlaces daily.0 => weekly.0' 	
+          $date 	
+          $cp -al $dest_daily.0/. $dest_weekly.0 2> $dest_logs/cp-$1.log 	;;     
+        monthly) 	
+          mv $dest_monthly.0 $monthly_borrar 	
+          mkdir $dest_monthly.0 	
+          echo 'copiando con enlaces daily.0 => monthly.0' 	
+          $date 	
+          $cp -al $dest_daily.0/. $dest_monthly.0 2> $dest_logs/cp-$1.log 	;; 
+        esac 
+        echo "fin copia" ; $date 
+        if [ $1 == "daily" ] then
+          echo '~~~~~~~~~~~ RSYNC ~~~~~~~~~~~~~~'     
+          $date     
+          for server in "${!servers[@]}"     
+          do 	
+            exitcode=255 	
+            bucle=0 	
+            buclemax=3 	
+            if [ $server = "oraprod_dump" ] 	
+            then 	    
+              rsync="/usr/bin/rsync $rsynckeepargs" 	
+            else
+              rsync="/usr/bin/rsync $rsyncargs" 	
+            fi
+            echo "server = $server" 	
+            echo $rsync ${servers[$server]} "$dest_base/$1.0/$server/" 	
+            echo "" > $dest_logs/rsync-$server-$1.log 	
+            while [ $exitcode -ne 0 ] 	do
+              ((bucle++)) 	    
+              $rsync ${servers[$server]} "$dest_base/$1.0/$server/" >> $dest_logs/rsync-$server-$1.log 2>&1 	    
+              exitcode=$? 	    
+              echo "$server rsync $bucle" ; $date; echo "" 	    
+              if [ $bucle -eq $buclemax ] 	    
+              then 		
+                echo "proteccion de bucle infinto..." 		
+                echo "el rsync itero $bucle veces con error $exitcode para el server $server" 		
+                break 	    
+               fi 	
+             done     
+           done     
+           echo "Fin rsync"; $date 
+         fi 
+         } 
+         
+         function limpieza { 
+            ## Limpia el semanal, una vez a la semana ## el mensual, una vez al mes 
+              case $1 in     
+                weekly) 	
+                  echo find $weekly_borrar -delete 	
+                  find $weekly_borrar -delete 	;;     
+                monthly) 	
+                  echo find $monthly_borrar -delete 	
+                  find $monthly_borrar -delete 	;;     
+                  ## Alternativas de borrado
+                  ## el rsync no borra la carpeta padre, el rm parece ser el mas lento     
+                  #rm -rf $destborrar     
+                  #perl -w -e 'use File::Path ;rmtree( "$destborrar" )'     
+                  #rsync -a --delete $dest_base/empty_folder/ "$destborrar"/ 
+              esac 
+              echo "Fin de limpieza: "; $date 
+           } 
+           
+           function main { 
+              echo "ndia:$ndia ddia:$ddia" 
+              echo "---Inicio de backup diario---" 
+              snapshot daily 
+                if [ $ndia == "Sun" ] then
+                  echo "---Inicio de backup semanal---"     
+                  weekly_borrar=$dest_weekly.borrar$RANDOM     
+                  snapshot weekly     
+                  limpieza weekly 
+                fi 
+                if [ $ddia = "01" ] then
+                  echo "---Inicio de backup mensual---"
+                  monthly_borrar=$dest_monthly.borrar$RANDOM
+                  snapshot monthly
+                  limpieza monthly 
+                fi 
+                echo '~~~~~~~~~~~ CHECK ~~~~~~~~~~~~~~' 
+                #Archivo supuestamente invariable #el inodo debe coincidir y debe tener mas de un link 
+                echo "ServerA:" $stat "$dest_base"/{daily,weekly,monthly}.?/serverA/root/uninmutable_file | grep Inode 
+                echo #Archivo que debería ser distinto cada día, al menos este debería copiarse en el rsync: 
+                  for i in daily weekly monthly do
+                    modoret=modoret$i     
+                    modoret=$(eval echo \$$modoret)     
+                    for y in {0..$modoret}     
+                    do 	
+                      echo "$dest_base/$i.$y/serverA/root/variableFile:" 	
+                      $cat "$dest_base/$i.$y/serverA/root/variableFile"     
+                    done 
+                  done 
+                } 
+              
+              main > $dest_logs/snapshotR.log 2>&1 
+              #                                                 FIN ## ########################################################
+
